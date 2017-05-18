@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/auth0-community/auth0"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	jose "gopkg.in/square/go-jose.v2"
@@ -37,26 +38,37 @@ func main() {
 	r.Handle("/products", authMiddleware(ProductsHandler)).Methods("GET")
 	r.Handle("/products/{slug}/feedback", authMiddleware(AddFeedbackHandler)).Methods("POST")
 
+	fmt.Println("Ready to listen for request on port 3000")
 	http.ListenAndServe(":3000", handlers.LoggingHandler(os.Stdout, r))
 }
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		secret := []byte("{YOUR-AUTH0-API-SECRET}")
-		secretProvider := auth0.NewKeyProvider(secret)
-		audience := "{YOUR-AUTH0-API-AUDIENCE}"
+		// secret, _ := base64.URLEncoding.DecodeString("l9rqay1dsOYc4D7SQqHKDTA1rY0FuvfO")
+		//
+		// secretProvider := auth0.NewKeyProvider(secret)
+		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: "https://avantidev.auth0.com/.well-known/jwks.json"})
+		audience := []string{"http://localhost:8080", "https://avantidev.auth0.com/userinfo"}
+		//iss, _ := base64.URLEncoding.DecodeString("https://avantidev.auth0.com")
 
-		configuration := auth0.NewConfiguration(secretProvider, audience, "https://{YOUR-AUTH0-DOMAIN}.auth0.com/", jose.HS256)
+		configuration := auth0.NewConfiguration(client, audience, "https://avantidev.auth0.com/", jose.RS256)
+
 		validator := auth0.NewValidator(configuration)
 
-		token, err := validator.ValidateRequest(r)
+		spew.Dump(validator)
 
+		token, err := validator.ValidateRequest(r)
+		fmt.Println("##########Token###############")
+		spew.Dump(token)
+		fmt.Println(token)
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println("Token is not valid:", token)
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
+			w.Write([]byte("401 Unauthorized"))
 		} else {
+			fmt.Println("Token validated successfully")
+			fmt.Println(token)
 			next.ServeHTTP(w, r)
 		}
 	})
